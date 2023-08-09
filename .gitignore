@@ -1,0 +1,6 @@
+.vscode/
+div/
+src/algorithms.jl
+src/fileIO.jl
+code_data.jl
+data/sim_trio.R
