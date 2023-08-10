@@ -36,13 +36,13 @@ end
 - `opt`: GREMLOpt with optimization info
 """
 struct GREMLModel{T<:AbstractFloat} <:StatsBase.StatisticalModel
-    data::VCData{T} # Type!?
+    data::GREMLData{T} # Type!?
     θ::Vector{T}
     δ::Vector{T}
     Λ::Cholesky{T, Matrix{T}}
     β::Vector{T}
     μ::Vector{T}
-    opt::VCOpt{T}
+    opt::GREMLOpt{T}
     invVX::Matrix{T}
 end
 
@@ -75,7 +75,7 @@ function GREMLModel(d::GREMLData, θ_lb::Vector{<:AbstractFloat}, reml::Bool = f
     )
 end
 
-function initialvalues(d::VCData)
+function initialvalues(d::GREMLData)
     n, _, q = d.dims
     X, y = d.X, d.y
     β = X \ y

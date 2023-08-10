@@ -1,6 +1,6 @@
-name = "VCModels"
-uuid = "1d6ed854-1066-44d3-ae38-1c6cab07ce89"
-authors = ["Espen Moen Eilertsen <e.m.eilertsen@psykologi.uio.no>"]
+name = "GREMLModels"
+uuid = "da4a04c4-868a-4285-9821-73fa1c6f6848"
+authors = ["espenmei <e.m.eilertsen@psykologi.uio.no>"]
 version = "0.1.0"
 
 [deps]

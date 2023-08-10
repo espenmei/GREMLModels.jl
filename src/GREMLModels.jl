@@ -18,7 +18,7 @@ export
     # Structs/constructors 
     GREMLData,
     GREMLModel,
-    VCOpt,
+    GREMLOpt,
     # Computations
     update!,
     setθ!,
