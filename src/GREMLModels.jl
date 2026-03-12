@@ -45,6 +45,7 @@ export
     stderrorvc,
     # Implements
     coef,
+    coeftable,
     deviance,
     dof,
     dof_residual,

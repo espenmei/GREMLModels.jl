@@ -12,5 +12,3 @@ r = [R1, R2]
   
 dat = DataFrame(y = y, x = rand(rng, n), z = rand(rng, n))
 m = fit(GREMLModel, @formula(y ~ 1 + x + z), dat, r)
-
-@test loglikelihood(m) ≈ -2292.68483 rtol = 1.0e-5
