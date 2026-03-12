@@ -12,3 +12,8 @@ r = [R1, R2]
   
 dat = DataFrame(y = y, x = rand(rng, n), z = rand(rng, n))
 m = fit(GREMLModel, @formula(y ~ 1 + x + z), dat, r)
+
+m2 = fit(GREMLModel, @formula(y ~ 1), dat, r)
+
+@test_nowarn coeftable(m2)
+@test occursin("(Intercept)", sprint(show, coeftable(m2)))

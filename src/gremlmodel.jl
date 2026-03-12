@@ -204,7 +204,8 @@ function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vect
     form = apply_schema(f, sch)
     y, X = modelcols(form, df)
     nms = coefnames(form)
-    d = GREMLData(y, X, r, nms)
+    xnms = nms[2] isa AbstractString ? [nms[2]] : collect(nms[2])
+    d = GREMLData(y, X, r, (nms[1], xnms))
     θ_lb = fill(0.0, length(r))
     m = GREMLModel(d, θ_lb, reml)
     fit!(m)
@@ -312,5 +313,5 @@ function Base.show(io::IO, m::GREMLModel)
     end
     # Fixed effects
     println(io, "\n Fixed-effects parameters:")
-    show(io, coeftable(m))
+    show(io, MIME("text/plain"), coeftable(m))
 end
