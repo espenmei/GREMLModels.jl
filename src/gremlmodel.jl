@@ -44,9 +44,10 @@ struct GREMLModel{T<:AbstractFloat} <:StatsBase.StatisticalModel
     μ::Vector{T}
     opt::GREMLOpt{T}
     invVX::Matrix{T}
+    wrk::Vector{T}
 end
 
-function GREMLModel(d::GREMLData, θ::Vector{T},  θ_lb::Vector{T}, reml::Bool = false) where T<:AbstractFloat
+function GREMLModel(d::GREMLData, θ::Vector{T}, θ_lb::Vector{T}, reml::Bool = false) where T<:AbstractFloat
     n, p, _ = d.dims
     m = GREMLModel(
         d,
@@ -55,10 +56,11 @@ function GREMLModel(d::GREMLData, θ::Vector{T},  θ_lb::Vector{T}, reml::Bool =
         Cholesky(zeros(T, n, n), :U, 0),
         zeros(T, p),
         zeros(T, n),
-        GREMLOpt(:LN_BOBYQA, copy(θ), θ_lb, reml),
-        zeros(T, n, p)
+        GREMLOpt(copy(θ), θ_lb, reml),
+        zeros(T, n, p),
+        zeros(T, n)
         )
-    update!(m, m.θ) # Gjør et update her?
+    update!(m, m.θ)
     m.opt.finitial = objective(m)
     copyto!(m.opt.xfinal, m.opt.xinitial)
     m.opt.ffinal = m.opt.finitial
@@ -134,9 +136,11 @@ end
 # Same as y'Py in Lynch & Walsh
 # Same as trace(V^-1(y - Xβ)(y - Xβ)')
 function wrss(m::GREMLModel)
-    ϵ = m.data.y - m.μ # Allocates
-    invVϵ = m.Λ \ ϵ 
-    dot(ϵ, invVϵ)
+    wrk = m.wrk
+    copyto!(wrk, m.data.y)
+    wrk .-= m.μ
+    ldiv!(m.Λ.L, wrk)   # wrk = L⁻¹(y - Xβ), where V = LL'
+    sum(abs2, wrk)       # = (y - Xβ)'V⁻¹(y - Xβ)
 end
 
 # Adjustment for reml likelihood
@@ -156,7 +160,7 @@ end
 # Same as reml so make one X' * (m.Λ \ X) function 
 function vcov(m::GREMLModel)
     X = m.data.X
-    inv(X' * (m.Λ \ X))
+    inv(Symmetric(X' * (m.Λ \ X)))
 end
 
 # covariance of variance components
@@ -199,7 +203,8 @@ end
 
 # Implements
 # StatsAPI
-function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vector; reml::Bool=false, verbose::Bool=true)
+function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vector;
+        reml::Bool = false, solver::NLoptSolver = NLoptSolver(), verbose::Bool = true)
     sch = schema(f, df)
     form = apply_schema(f, sch)
     y, X = modelcols(form, df)
@@ -208,10 +213,10 @@ function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vect
     d = GREMLData(y, X, r, (nms[1], xnms))
     θ_lb = fill(0.0, length(r))
     m = GREMLModel(d, θ_lb, reml)
-    fit!(m; verbose)
+    fit!(m, solver; verbose)
 end
 
-function StatsAPI.fit!(m::GREMLModel; verbose::Bool=true)
+function StatsAPI.fit!(m::GREMLModel, solver::NLoptSolver = NLoptSolver(); verbose::Bool = true)
     if m.opt.feval > 0
         throw(ArgumentError("This model has already been fitted"))
     end
@@ -224,7 +229,7 @@ function StatsAPI.fit!(m::GREMLModel; verbose::Bool=true)
         end
         val
     end
-    opt = Opt(m.opt)
+    opt = Opt(solver, m.opt)
     min_objective!(opt, obj)
     minf, minx, ret = optimize!(opt, m.θ)
     m.opt.ret = ret

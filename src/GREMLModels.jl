@@ -19,6 +19,7 @@ export
     GREMLData,
     GREMLModel,
     GREMLOpt,
+    NLoptSolver,
     # Computations
     update!,
     setθ!,
