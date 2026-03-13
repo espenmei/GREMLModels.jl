@@ -199,7 +199,7 @@ end
 
 # Implements
 # StatsAPI
-function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vector, reml::Bool=false)
+function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vector; reml::Bool=false, verbose::Bool=true)
     sch = schema(f, df)
     form = apply_schema(f, sch)
     y, X = modelcols(form, df)
@@ -208,10 +208,10 @@ function StatsAPI.fit(::Type{GREMLModel}, f::FormulaTerm, df::DataFrame, r::Vect
     d = GREMLData(y, X, r, (nms[1], xnms))
     θ_lb = fill(0.0, length(r))
     m = GREMLModel(d, θ_lb, reml)
-    fit!(m)
+    fit!(m; verbose)
 end
 
-function StatsAPI.fit!(m::GREMLModel)
+function StatsAPI.fit!(m::GREMLModel; verbose::Bool=true)
     if m.opt.feval > 0
         throw(ArgumentError("This model has already been fitted"))
     end
@@ -219,7 +219,9 @@ function StatsAPI.fit!(m::GREMLModel)
     function obj(θ::Vector, g)
         val = objective(update!(m, θ))
         update!(m.opt, θ, val)
-        showiter(m.opt)
+        if verbose
+            showiter(m.opt)
+        end
         val
     end
     opt = Opt(m.opt)

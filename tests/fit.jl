@@ -1,4 +1,4 @@
-using GREMLModels, LinearAlgebra, DataFrames, StatsModels, Test, Random
+using Revise, GREMLModels, LinearAlgebra, DataFrames, StatsModels, Test, Random
 
 const rng = MersenneTwister(123)
 
