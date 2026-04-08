@@ -11,11 +11,11 @@ end
 
 NLoptSolver(;
     algorithm::Symbol = :LN_BOBYQA,
-    xtol_abs::Real    = 1e-10,
-    xtol_rel::Real    = 0.0,
-    ftol_abs::Real    = 1e-8,
-    ftol_rel::Real    = 1e-12,
-    maxfeval::Int     = -1
+    xtol_abs::Real = 1e-10,
+    xtol_rel::Real = 0.0,
+    ftol_abs::Real = 1e-8,
+    ftol_rel::Real = 1e-12,
+    maxfeval::Int = -1
 ) = NLoptSolver(algorithm, xtol_abs, xtol_rel, ftol_abs, ftol_rel, maxfeval)
 
 #- `reml`: boolean indicator for reml
@@ -67,14 +67,6 @@ function NLopt.Opt(solver::NLoptSolver, opt::GREMLOpt)
     o
 end
 
-#function Base.show(io::IO, ::MIME"text/plain", o::VCOpt)
-   # for i ∈ 1:fieldcount(VCOpt)
-  #      name = fieldname(VCOpt, i)
- #       val = getfield(o, i)
-#        println(io, "$name = $val")
-#    end
-#end
-#Base.show(io::IO, o::VCOpt) = Base.show(io, MIME"text/plain"(), o)
 function Base.show(io::IO, o::GREMLOpt)
     for i ∈ 1:fieldcount(GREMLOpt)
         name = fieldname(GREMLOpt, i)

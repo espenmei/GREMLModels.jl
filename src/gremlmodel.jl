@@ -118,10 +118,8 @@ function updateμ!(m::GREMLModel)
     invVX = m.invVX
     β = m.β
     ldiv!(invVX, m.Λ, X)
-    # P/H = X, (X' * invVX) \ (invVX') -> "Hat matrix"
     mul!(β, invVX', y)
     ldiv!(bunchkaufman!(Symmetric(X'invVX)), β)
-    #β = Symmetric(X'invVX) \ (invVX'y)
     mul!(m.μ, X, β)
 end
 
@@ -262,7 +260,6 @@ StatsAPI.deviance(m::GREMLModel) = objective(m)
 
 StatsAPI.dof(m::GREMLModel) = m.data.dims.p + m.data.dims.q
 
-# Error for reml?
 StatsAPI.loglikelihood(m::GREMLModel) = -0.5 * objective(m)
 
 # StatsBase
