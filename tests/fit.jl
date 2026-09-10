@@ -1,4 +1,4 @@
-using Revise, GREMLModels, LinearAlgebra, DataFrames, StatsModels, Test, Random, MixedModels
+using GREMLModels, LinearAlgebra, DataFrames, StatsModels, Test, Random, MixedModels
 import MixedModels: LinearMixedModel
 import GREMLModels: vcov, stderror, objective
 
