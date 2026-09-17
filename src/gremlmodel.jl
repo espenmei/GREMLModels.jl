@@ -112,6 +112,20 @@ function updateΛ!(m::GREMLModel)
     m
 end
 
+# Whether the last `updateΛ!` produced a valid (positive definite) factorization.
+# `cholesky!(...; check = false)` does not throw on failure and its `info` is not
+# stored back into `m.Λ`, so we detect success from the Cholesky factor itself:
+# an upper-triangular Cholesky factor is valid iff every diagonal entry is finite
+# and strictly positive.
+function cholsuccess(m::GREMLModel)
+    F = m.Λ.factors
+    @inbounds for i ∈ diagind(F)
+        (isfinite(F[i]) && F[i] > zero(eltype(F))) || return false
+    end
+    true
+end
+
+
 # GLS for β - Pawitan p. 440 (X'V⁻¹X)β = X'V⁻¹y
 function updateμ!(m::GREMLModel)
     y, X = m.data.y, m.data.X
@@ -220,7 +234,18 @@ function StatsAPI.fit!(m::GREMLModel, solver::NLoptSolver = NLoptSolver(); verbo
     end
     # Det er jo egentlig gjort ett update når modellen ble laget. Men da må du stole på at modellen ikke har blitt klussa med.
     function obj(θ::Vector, g)
-        val = objective(update!(m, θ))
+        setθ!(m, θ)
+        updateΛ!(m)
+        # Some parameter combinations the optimizer tries make the implied
+        # covariance non-positive-definite. Skip GLS on the broken factor and
+        # hand the optimizer +Inf so the point is rejected instead of poisoning
+        # the search with NaN/-Inf from an invalid factorization.
+        val = if cholsuccess(m)
+            updateμ!(m)
+            objective(m)
+        else
+            convert(eltype(m.θ), Inf)
+        end
         update!(m.opt, θ, val)
         if verbose
             showiter(m.opt)
@@ -230,6 +255,9 @@ function StatsAPI.fit!(m::GREMLModel, solver::NLoptSolver = NLoptSolver(); verbo
     opt = Opt(solver, m.opt)
     min_objective!(opt, obj)
     minf, minx, ret = optimize!(opt, m.θ)
+    update!(m, minx) # leave the model in a consistent state at the optimum
+    copyto!(m.opt.xfinal, minx) # record the optimum, not the last point tried
+    m.opt.ffinal = minf
     m.opt.ret = ret
     if ret ∈ [:FAILURE, :INVALID_ARGS, :OUT_OF_MEMORY, :FORCED_STOP, :MAXEVAL_REACHED]
         @warn("NLopt optimization failure: $ret")
