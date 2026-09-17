@@ -108,10 +108,10 @@ function vec2ugrm(v::AbstractVector{T}) where {T<:AbstractFloat}
     G
 end
 
-# Write G to `<filename>.h5`, streaming column-by-column into a chunked dataset.
-# Never materializes the full upper-triangle vector, and chunking makes the
-# partial reads in `read_grm_subset` efficient. Stores G's element type as-is
-# (pass a Float32 matrix to halve the file).
+# Write G to `<filename>.h5`, streaming chunks of each column into a chunked
+# dataset. Never materializes the full upper-triangle vector, and chunking makes
+# the partial reads in `read_grm_subset` efficient. Stores G's element type
+# as-is (pass a Float32 matrix to halve the file).
 function write_grm(G::AbstractMatrix{T}, filename::AbstractString;
                    nme::AbstractString = "grm_u") where {T<:AbstractFloat}
     P = _upperparent(G)
@@ -119,22 +119,21 @@ function write_grm(G::AbstractMatrix{T}, filename::AbstractString;
     p = div(k * (k + 1), 2)
     stride = size(P, 1)
     h5open(filename * ".h5", "w") do file
-        chunklen = min(p, max(k, 1 << 22))       # ≥ one column, capped at ~4M elems
+        chunklen = min(p, 1 << 22)
         d = create_dataset(file, nme, T, (p,); chunk = (chunklen,))
         buf = Vector{T}(undef, chunklen)
-        bpos = 0  # elements currently buffered
-        dpos = 0  # elements already written to the dataset
+        dpos = 0
         @inbounds for i in 1:k                    # column i, upper part = rows 1:i
-            if bpos + i > chunklen
-                d[dpos + 1 : dpos + bpos] = view(buf, 1:bpos)
-                dpos += bpos
-                bpos = 0
+            srcpos = (i - 1) * stride + 1
+            remaining = i
+            while remaining > 0
+                ncopy = min(remaining, chunklen)
+                copyto!(buf, 1, P, srcpos, ncopy)
+                d[dpos + 1 : dpos + ncopy] = view(buf, 1:ncopy)
+                srcpos += ncopy
+                dpos += ncopy
+                remaining -= ncopy
             end
-            copyto!(buf, bpos + 1, P, (i - 1) * stride + 1, i)
-            bpos += i
-        end
-        if bpos > 0
-            d[dpos + 1 : dpos + bpos] = view(buf, 1:bpos)
         end
     end
 end
@@ -161,6 +160,7 @@ function read_grm_subset(filename::AbstractString, keep::AbstractVector{<:Intege
                          nme::AbstractString = "grm_u")
     kp = sort(unique(keep))
     k = length(kp)
+    isempty(kp) && throw(ArgumentError("no individuals selected for the GRM subset"))
     lo = first(kp)
     h5open(filename, "r") do file
         d = file[nme]
@@ -234,7 +234,7 @@ end
 # Example pipeline (runs on the bundled data/trio PLINK files)
 # ===========================================================================
 
-trio = SnpData("data/trio")
+trio = SnpData(joinpath(@__DIR__, "..", "data", "trio"))
 matsize_gb(trio.people, trio.people)              # size of the dense GRM in memory
 
 # 1. Compute the GRM (2Φ) from SNP data, blocked over SNPs.
@@ -242,7 +242,7 @@ matsize_gb(trio.people, trio.people)              # size of the dense GRM in mem
 
 # (optional) validate against SnpArrays' built-in grm — doubles memory/compute,
 # only feasible on small data.
-@time A_ref = 2 * grm(trio.snparray; method = :GRM)
+@time A_ref = 2 * grm(trio.snparray; method = :GRM, minmaf = 0)
 @assert isapprox(A, A_ref)
 
 # 2. Store to HDF5 (upper triangle, column-vectorized, chunked).
