@@ -189,16 +189,20 @@ end
 # From candidate trios (aligned offspring/mother/father index vectors, one entry
 # per trio), keep only trios where BOTH parents survive kinship pruning (removes
 # closely related parent pairs). Returns the surviving (offspring, mother, father)
-# index vectors. `kinship_pruning` comes from SnpArrays and returns a BitVector
-# over the pruned matrix (here ordered [mothers; fathers]).
-function sel_trio(A, oid, mid, fid; method::Symbol = :bottom_up, cutoff::Real = 0.1)
-    nm = length(mid)
-    mf_inds = vcat(mid, fid)
-    A_mf = A[mf_inds, mf_inds]
-    keep = kinship_pruning(A_mf; method = method, cutoff = cutoff)  # BitVector over [mid; fid]
-    m_keep = @view keep[1:nm]
-    f_keep = @view keep[nm + 1:end]
-    sel = findall(m_keep .& f_keep)          # trios whose mother AND father survive
+# index vectors.
+#
+# Kinship pruning only needs relationships AMONG the parents, so only the
+# parents×parents block is read from the HDF5 GRM — never the full matrix. The
+# offspring do not participate in pruning. `kinship_pruning` comes from SnpArrays
+# and returns a BitVector over the rows of the block it is given.
+function sel_trio(filename::AbstractString, oid, mid, fid;
+                  method::Symbol = :bottom_up, cutoff::Real = 0.1,
+                  nme::AbstractString = "grm_u")
+    parents = sort(unique(vcat(mid, fid)))              # global indices of all parents
+    A_par = read_grm_subset(filename, parents; nme = nme)  # parents block only, from disk
+    keepmask = kinship_pruning(A_par; method = method, cutoff = cutoff)
+    kept = Set(parents[keepmask])                       # surviving parent global indices
+    sel = findall(i -> (mid[i] in kept) && (fid[i] in kept), eachindex(oid))
     (oid[sel], mid[sel], fid[sel])
 end
 
@@ -246,13 +250,13 @@ matsize_gb(trio.people, trio.people)              # size of the dense GRM in mem
 @assert isapprox(A, A_ref)
 
 # 2. Store to HDF5 (upper triangle, column-vectorized, chunked).
-#    Tip: write_grm(Float32.(parent(A)) |> x -> Symmetric(x, :U), "grm4") to
-#    halve the file — read it back and widen to Float64 for the model.
+#    Tip: write_grm(Symmetric(Float32.(parent(A)), :U), "grm4") to halve the
+#    file — read it back and widen to Float64 for the model.
 write_grm(A, "grm4")
 
-# 3a. Full read back (materializes the whole matrix).
-A_full = read_grm("grm4.h5")
-@assert isapprox(A_full, A)
+# (optional, small data only) validate the round trip. This materializes the
+# whole matrix, so skip it for large GRMs.
+@assert isapprox(read_grm("grm4.h5"), A)
 
 # Define candidate trios (this toy dataset is laid out mothers|fathers|offspring).
 n = trio.people
@@ -261,11 +265,12 @@ mid = collect(1:k)          # mothers
 fid = collect(k+1:2k)       # fathers
 oid = collect(2k+1:3k)      # offspring
 
-# 3b. Prune related trios (kinship_pruning is provided by SnpArrays).
-oid, mid, fid = sel_trio(A_full, oid, mid, fid)
+# 3. Prune related trios. sel_trio reads ONLY the parents×parents block from
+#    disk — the full GRM is never materialized.
+oid, mid, fid = sel_trio("grm4.h5", oid, mid, fid)
 
-# 4. Read ONLY the needed individuals from disk (no full matrix), remap to local
-#    indices, and build the trio-specific GRMs on the small submatrix.
+# 4. Read ONLY the surviving trio individuals from disk, remap to local indices,
+#    and build the trio-specific GRMs on the small submatrix.
 keep = sort(unique(vcat(oid, mid, fid)))
 loc  = Dict(g => i for (i, g) in enumerate(keep))
 Asub = read_grm_subset("grm4.h5", keep)
